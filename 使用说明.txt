@@ -1,0 +1,16 @@
+鲸鱼微信机器人（Windows）
+
+首次使用：
+1. 安装 64 位 Python 3.11，并安装、登录 Windows 微信。让机器人账号加入目标群。
+2. 编辑 config.json：填写 OpenAI 兼容接口的 Base URL、服务商提供的模型 ID、群聊名称和机器人群昵称。
+3. 双击 install_env.bat 安装 Python 依赖。
+4. 右键“使用 PowerShell 运行”设置密钥.ps1，输入 API Key。密钥由当前 Windows 用户加密保存到 secret.txt。
+5. 确认目标群在微信会话列表第一位且输入框无草稿，然后双击启动后台.vbs。停止时双击停止后台.vbs。
+
+说明：
+- trigger=all：尝试回复启动后目标群收到的每条新文字消息；mention：仅回复 @机器人昵称的消息；prefix：仅回复以 prefix 开头的消息。
+- 修改 persona.txt 后下一条消息生效；修改 config.json 后需重启。
+- bot.log 和 error.log 用于查看运行状态和错误。
+- secret.txt 只能由创建它的 Windows 用户解密。不要上传或分享 secret.txt、日志、微信数据或账号资料。
+- 需要微信保持登录、电脑运行并联网。此程序依赖第三方微信自动化，可能受微信版本变化影响，也可能触发平台限制；请自行评估并遵守微信规则。
+- 当前发送实现依赖微信桌面界面操作，可能切换窗口并影响键鼠焦点，不适合需要完全无打扰操作的环境。
