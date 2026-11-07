@@ -1,0 +1,9 @@
+{
+  "base_url": "https://api.example.com/v1",
+  "model": "YOUR_MODEL_ID",
+  "group_name": "YOUR_GROUP_NAME",
+  "bot_name": "YOUR_BOT_NICKNAME",
+  "trigger": "all",
+  "prefix": "小鲸",
+  "history_messages": 12
+}
