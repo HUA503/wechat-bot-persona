@@ -1,0 +1,2 @@
+requests>=2.32.3
+wechatauto-replica[guia]==1.2.8.0
