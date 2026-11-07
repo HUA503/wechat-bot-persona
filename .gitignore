@@ -1,0 +1,11 @@
+.venv/
+venv/
+__pycache__/
+cache/
+wechatauto_logs/
+bot.lock
+bot.pid
+bot.log
+error.log
+secret.txt
+*.pyc
