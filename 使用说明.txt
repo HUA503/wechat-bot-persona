@@ -1,4 +1,4 @@
-鲸鱼微信机器人（Windows）
+微信群 AI 自动回复机器人（Windows）
 
 首次使用：
 1. 安装 64 位 Python 3.11，并安装、登录 Windows 微信。让机器人账号加入目标群。
@@ -9,8 +9,41 @@
 
 说明：
 - trigger=all：尝试回复启动后目标群收到的每条新文字消息；mention：仅回复 @机器人昵称的消息；prefix：仅回复以 prefix 开头的消息。
-- 修改 persona.txt 后下一条消息生效；修改 config.json 后需重启。
+- 修改 persona.txt 后下一条消息生效；修改 config.json 后大部分开关立即生效（按文件 mtime 热加载），改 trigger / 群名 / 模型等启动参数需重启。
 - bot.log 和 error.log 用于查看运行状态和错误。
 - secret.txt 只能由创建它的 Windows 用户解密。不要上传或分享 secret.txt、日志、微信数据或账号资料。
 - 需要微信保持登录、电脑运行并联网。此程序依赖第三方微信自动化，可能受微信版本变化影响，也可能触发平台限制；请自行评估并遵守微信规则。
 - 当前发送实现依赖微信桌面界面操作，可能切换窗口并影响键鼠焦点，不适合需要完全无打扰操作的环境。
+
+可选功能（都在 config.json 里开关，模板里默认关闭，改完不用重启）：
+- 私聊回复：private_chats 填备注名或昵称（精确匹配），例：["联系人A","联系人B"]。留空 = 不回复任何私聊。
+- 表情包：sticker.enabled + sticker.dir 指向图库（一级子目录名即分类，如 开心/傲娇/炸毛）。
+  sticker.chance 是主动配图概率（0~1，默认 0.6），sticker.chance_by_chat 可按会话单独覆盖；
+  也能双击 设置发图几率.bat 交互式改。用户明确说“发个表情包”时必定发图。
+  sticker.fast=true 走快路径（实测约 1 秒落库），失败自动回退标准发送。
+- 识图：vision.enabled 打开后，收到的表情包 / 照片会先发给模型服务商再回应。
+  vision.allow_network 控制表情包是否回源 CDN，vision.photos 控制照片解密识别，
+  vision.reply_on_fail=true 时读不到图会回一句提示，而不是装没看见。
+- 语音回复：voice.enabled + voice.chance（0~1 的随机概率；被明确要求“发语音”时必定发）。
+  voice.groups / voice.private 分别控制群聊、私聊是否允许；voice.max_chars 限制朗读字数。
+  voice.whalegirl_dir 指向 WhaleGirl 目录（留空则该功能不可用，不会崩溃）；
+  需要 VB-CABLE 虚拟声卡 + WhaleGirl 的 TTS 密钥。语音发送失败会自动回退成文字。
+
+常见问题：
+- 启动后没有任何反应：先看 bot.log 是否出现“正在监听 N 个会话”。没有就说明启动失败，
+  错误原因在 error.log 和弹窗里。已运行时会锁 bot.lock，重复启动会被拒绝。
+- 群聊不回复：确认群名与微信里完全一致、该群在会话列表第一位、窗口没被其他窗口遮挡、
+  微信窗口没有被缩到很小（发送前会检查窗口尺寸）。
+- 语音发不出去：
+  · 先看微信本身是不是白屏了（窗口只剩一片空白、看不到会话列表）。微信渲染层
+    崩掉时 UIA 读不到任何控件，会连续报「无法确认目标账号或会话」「发送超时」。
+    这种情况只能重启微信（任务管理器结束 Weixin.exe 再打开）。
+  · 日志出现 sent_unconfirmed / uncertain 不代表失败。Launcher 拿不到微信回执时
+    会这么报，但消息通常已经发出去了，去聊天记录里看语音气泡的时长即可确认。
+    程序只在 Error 明确说「无法确认会话 / 快捷键不一致」时判定为真失败并重试。
+  · 确认扬声器默认设备是 CABLE Input、麦克风默认设备是 CABLE Output。
+  · 微信「发送语音」快捷键必须与 WhaleGirl 的 data/voice-send.json 中
+    RecordingHotkey 一致。不一致时日志会直接提示“快捷键与配置不一致”。
+- 微信重启后第一次启动机器人较慢：DB 快照要重新解密，可能 8~12 秒，属正常。
+- 模型接口 429 / 503：程序会自动按 Retry-After 或 1.5s→3s 退避重试最多 3 次，
+  日志里能看到“模型接口 429（1/3），x.xs 后重试”。密钥错误（401）不重试，直接报错。

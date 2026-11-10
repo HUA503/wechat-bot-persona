@@ -8,4 +8,5 @@ bot.pid
 bot.log
 error.log
 secret.txt
+.account_cache.json
 *.pyc

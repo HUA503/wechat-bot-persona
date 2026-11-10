@@ -5,5 +5,37 @@
   "bot_name": "YOUR_BOT_NICKNAME",
   "trigger": "all",
   "prefix": "小鲸",
-  "history_messages": 12
+  "history_messages": 12,
+  "private_chats": [],
+  "private_trigger": "inherit",
+  "notify_on_start": true,
+  "startup": {
+    "fast_account": true,
+    "warmup_gui": true
+  },
+  "sticker": {
+    "enabled": false,
+    "dir": "D:\\wechat-bot\\stickers",
+    "chance": 0.6,
+    "chance_by_chat": {},
+    "recent": 10,
+    "fast": true,
+    "fast_wait": 0.8
+  },
+  "vision": {
+    "enabled": false,
+    "allow_network": true,
+    "photos": true,
+    "photo_retries": 5,
+    "photo_retry_wait": 0.5,
+    "reply_on_fail": true
+  },
+  "voice": {
+    "enabled": false,
+    "whalegirl_dir": "",
+    "chance": 0,
+    "max_chars": 120,
+    "groups": true,
+    "private": true
+  }
 }
