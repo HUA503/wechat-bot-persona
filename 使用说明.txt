@@ -1,39 +1,77 @@
 微信群 AI 自动回复机器人（Windows）
 
-首次使用：
+一、首次使用
 1. 安装 64 位 Python 3.11，并安装、登录 Windows 微信。让机器人账号加入目标群。
 2. 编辑 config.json：填写 OpenAI 兼容接口的 Base URL、服务商提供的模型 ID、群聊名称和机器人群昵称。
 3. 双击 install_env.bat 安装 Python 依赖。
 4. 右键“使用 PowerShell 运行”设置密钥.ps1，输入 API Key。密钥由当前 Windows 用户加密保存到 secret.txt。
 5. 确认目标群在微信会话列表第一位且输入框无草稿，然后双击启动后台.vbs。停止时双击停止后台.vbs。
 
-说明：
-- trigger=all：尝试回复启动后目标群收到的每条新文字消息；mention：仅回复 @机器人昵称的消息；prefix：仅回复以 prefix 开头的消息。
-- 修改 persona.txt 后下一条消息生效；修改 config.json 后大部分开关立即生效（按文件 mtime 热加载），改 trigger / 群名 / 模型等启动参数需重启。
-- bot.log 和 error.log 用于查看运行状态和错误。
+先只跑文字回复。config.json 里的 sticker / vision / voice 三段默认是关闭的，
+把文字回复跑通、确认能正常收发之后，再按第四节逐个打开可选功能。
+
+二、触发与生效
+- trigger=all：尝试回复启动后目标群收到的每条新文字消息；mention：仅回复 @机器人昵称的消息；
+  prefix：仅回复以 prefix 开头的消息。
+- 修改 persona.txt 后下一条消息生效。
+- 修改 config.json 后大部分开关立即生效（按文件 mtime 热加载），
+  改 trigger / 群名 / 模型 / private_chats 等启动参数需要重启。
+- 启动成功的标志是 bot.log 出现“正在监听 N 个会话”。N 是群聊 + 私聊白名单的总数。
+- bot.log 记运行状态，error.log 记错误。
+
+三、安全前提
 - secret.txt 只能由创建它的 Windows 用户解密。不要上传或分享 secret.txt、日志、微信数据或账号资料。
-- 需要微信保持登录、电脑运行并联网。此程序依赖第三方微信自动化，可能受微信版本变化影响，也可能触发平台限制；请自行评估并遵守微信规则。
-- 当前发送实现依赖微信桌面界面操作，可能切换窗口并影响键鼠焦点，不适合需要完全无打扰操作的环境。
+- 需要微信保持登录、电脑运行并联网。此程序依赖第三方微信自动化，可能受微信版本变化影响，
+  也可能触发平台限制；请自行评估并遵守微信规则。
+- 发送实现依赖微信桌面界面操作，可能切换窗口并影响键鼠焦点，不适合需要完全无打扰操作的环境。
+- 打开识图后，收到的图片会发送给模型服务商。合规性请自行确认。
 
-可选功能（都在 config.json 里开关，模板里默认关闭，改完不用重启）：
-- 私聊回复：private_chats 填备注名或昵称（精确匹配），例：["联系人A","联系人B"]。留空 = 不回复任何私聊。
-- 表情包：sticker.enabled + sticker.dir 指向图库（一级子目录名即分类，如 开心/傲娇/炸毛）。
-  sticker.chance 是主动配图概率（0~1，默认 0.6），sticker.chance_by_chat 可按会话单独覆盖；
-  也能双击 设置发图几率.bat 交互式改。用户明确说“发个表情包”时必定发图。
-  sticker.fast=true 走快路径（实测约 1 秒落库），失败自动回退标准发送。
-- 识图：vision.enabled 打开后，收到的表情包 / 照片会先发给模型服务商再回应。
-  vision.allow_network 控制表情包是否回源 CDN，vision.photos 控制照片解密识别，
-  vision.reply_on_fail=true 时读不到图会回一句提示，而不是装没看见。
-- 语音回复：voice.enabled + voice.chance（0~1 的随机概率；被明确要求“发语音”时必定发）。
-  voice.groups / voice.private 分别控制群聊、私聊是否允许；voice.max_chars 限制朗读字数。
-  voice.whalegirl_dir 指向 WhaleGirl 目录（留空则该功能不可用，不会崩溃）；
-  需要 VB-CABLE 虚拟声卡 + WhaleGirl 的 TTS 密钥。语音发送失败会自动回退成文字。
+四、可选功能（都在 config.json 里开关，改完不用重启）
 
-常见问题：
+1) 私聊回复
+   private_chats 填备注名或昵称（精确匹配，就是你在微信联系人列表里看到的名字，不是微信号）。
+   例：["联系人A","联系人B"]。留空 = 不回复任何私聊。
+   private_trigger=inherit 表示沿用 trigger 的规则，也可以单独填 all / mention / prefix。
+
+2) 表情包
+   sticker.enabled=true 打开；sticker.dir 指向图库根目录，程序目录下默认是 stickers。
+   图库怎么准备：自己收集 jpg / jpeg / png / gif / webp，按情绪分到一级子目录，
+   目录名就是分类名（如 开心 / 傲娇 / 炸毛 / 无语），模型会从这些名字里挑一个。
+   分类名起得越直白，挑得越准；单个文件超过 64MB 会被跳过。
+   启动时 bot.log 会打印“表情包图库：N 类 / 共 M 张”，M 为 0 说明目录没放对。
+   sticker.chance 是每次回复主动配图的概率（模板里 0.6），chance_by_chat 可按会话单独覆盖
+   （键用会话名），也能双击 设置发图几率.bat 交互式改。
+   用户明确说“发个表情包”时必定发图，不看概率。
+   sticker.fast=true 走快路径（实测约 1 秒落库），失败会自动回退到标准发送。
+
+3) 收图识图
+   vision.enabled=true 打开。要求模型本身支持图片输入（多模态），否则图发过去也没人看得懂。
+   vision.allow_network 控制表情包是否从微信 CDN 回源（只放行 *.tc.qq.com，且必须 md5 校验通过）。
+   vision.photos 控制聊天里的普通照片是否解密后识别。
+   vision.reply_on_fail=true 时读不到图会回一句提示，而不是装没看见。
+
+4) 语音回复
+   voice.enabled=true 打开；voice.whalegirl_dir 填 WhaleGirl 的安装目录。
+   WhaleGirl 是一个独立的本地项目（提供 WhaleLauncher.exe 与 bridge/voice_reply.py），
+   本仓库不包含它；没有的话保持 voice.enabled=false，不影响文字回复。
+   还需要 VB-Audio Virtual Cable，默认播放设备设为 CABLE Input、默认录音设备设为 CABLE Output。
+   voice.chance 是随机语音概率（0 表示只在被明确要求“发语音”时才发）。
+   voice.groups / voice.private 分别控制群聊、私聊是否允许；voice.max_chars 限制朗读字数。
+   依赖缺失时日志会打印“语音依赖缺失：WhaleLauncher.exe / data/voice-send.json …”，照提示补齐即可。
+   语音发送失败会自动回退成文字，不会一声不吭。
+   注意：语音是朗读文字，不是唱歌。
+
+五、常见问题
 - 启动后没有任何反应：先看 bot.log 是否出现“正在监听 N 个会话”。没有就说明启动失败，
   错误原因在 error.log 和弹窗里。已运行时会锁 bot.lock，重复启动会被拒绝。
 - 群聊不回复：确认群名与微信里完全一致、该群在会话列表第一位、窗口没被其他窗口遮挡、
   微信窗口没有被缩到很小（发送前会检查窗口尺寸）。
+- 表情包不发：
+  · sticker.enabled 是 true 吗；sticker.dir 指向的目录存在吗；日志里“共 M 张”是不是 0。
+  · 概率是不是被设成 0 了（检查 sticker.chance 与 chance_by_chat）。
+  · 严肃场景（对方在说坏消息 / 求助）会主动不发图，属正常。
+- 发了图但对方看不到 / 报错：多半是图片格式或体积问题，换成常见 jpg/png/gif 再试。
+- 识图没反应：确认模型支持图片输入；确认 vision.allow_network 没被本地网络策略挡住。
 - 语音发不出去：
   · 先看微信本身是不是白屏了（窗口只剩一片空白、看不到会话列表）。微信渲染层
     崩掉时 UIA 读不到任何控件，会连续报「无法确认目标账号或会话」「发送超时」。
@@ -47,3 +85,16 @@
 - 微信重启后第一次启动机器人较慢：DB 快照要重新解密，可能 8~12 秒，属正常。
 - 模型接口 429 / 503：程序会自动按 Retry-After 或 1.5s→3s 退避重试最多 3 次，
   日志里能看到“模型接口 429（1/3），x.xs 后重试”。密钥错误（401）不重试，直接报错。
+
+六、文件说明
+- bot.py            消息监听、模型请求，以及表情包 / 识图 / 语音的发送编排
+- sticker.py        图库扫描与选图（纯逻辑，可单独运行查看图库统计）
+- vision.py         表情包回源校验与照片预处理
+- voice.py          语音气泡发送，复用 WhaleGirl 的录制链路
+- config.json       接口地址、模型与功能开关模板
+- persona.txt       角色提示词
+- 设置密钥.ps1      加密保存 API Key
+- 设置发图几率.bat   交互式修改表情包概率
+- 启动后台.vbs / 停止后台.vbs / manager.ps1   后台启停
+- install_env.bat / requirements.txt          环境与依赖安装
+更完整的说明见 README.md。
