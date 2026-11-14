@@ -1,9 +1,11 @@
 {
   "base_url": "https://api.example.com/v1",
-  "model": "YOUR_MODEL_ID",
+  "model": "qwen2.5-persona:latest",
   "group_name": "YOUR_GROUP_NAME",
   "bot_name": "YOUR_BOT_NICKNAME",
   "trigger": "all",
   "prefix": "小鲸",
-  "history_messages": 12
+  "history_messages": 6,
+  "max_tokens": 160,
+  "request_timeout": 45
 }

@@ -3,6 +3,7 @@ import re
 import sys
 import time
 import ctypes
+import os
 from collections import deque
 from pathlib import Path
 
@@ -34,8 +35,20 @@ def send_background(db, group_id, group_name, text):
     try:
         win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
         win32gui.BringWindowToTop(hwnd)
-        win32gui.SetForegroundWindow(hwnd)
-        win32gui.SetActiveWindow(hwnd)
+        try:
+            win32gui.SetForegroundWindow(hwnd)
+            win32gui.SetActiveWindow(hwnd)
+        except Exception:
+            # Windows may block foreground changes from a background process.
+            # An Alt tap grants the process a foreground-switch opportunity.
+            win32api.keybd_event(win32con.VK_MENU,0,0,0)
+            win32api.keybd_event(win32con.VK_MENU,0,win32con.KEYEVENTF_KEYUP,0)
+            try:
+                win32gui.SetForegroundWindow(hwnd)
+                win32gui.SetActiveWindow(hwnd)
+            except Exception:
+                # The coordinate click below can still activate the visible window.
+                pass
     finally:
         for tid in attached:
             win32process.AttachThreadInput(cur_tid, tid, False)
@@ -58,6 +71,14 @@ def send_background(db, group_id, group_name, text):
         win32clipboard.SetClipboardText(text, win32con.CF_UNICODETEXT)
     finally:
         win32clipboard.CloseClipboard()
+    # Do not append a reply to any text already in the compose box.
+    win32api.keybd_event(win32con.VK_CONTROL,0,0,0)
+    win32api.keybd_event(ord('A'),0,0,0)
+    win32api.keybd_event(ord('A'),0,win32con.KEYEVENTF_KEYUP,0)
+    win32api.keybd_event(win32con.VK_CONTROL,0,win32con.KEYEVENTF_KEYUP,0)
+    win32api.keybd_event(win32con.VK_BACK,0,0,0)
+    win32api.keybd_event(win32con.VK_BACK,0,win32con.KEYEVENTF_KEYUP,0)
+    time.sleep(.1)
     for vk, flags in ((win32con.VK_CONTROL,0),(ord('V'),0),(ord('V'),win32con.KEYEVENTF_KEYUP),(win32con.VK_CONTROL,win32con.KEYEVENTF_KEYUP)):
         win32api.keybd_event(vk,0,flags,0)
     time.sleep(.4)
@@ -76,13 +97,15 @@ def get_key():
     import win32crypt
     secret = ROOT / 'secret.txt'
     if not secret.exists():
-        raise RuntimeError('缺少 secret.txt，请运行 设置密钥.ps1。')
+        # Cloudflare Access may be the only auth layer for a private Ollama endpoint.
+        return ''
     encrypted = bytes.fromhex(secret.read_text(encoding='ascii').strip())
     return win32crypt.CryptUnprotectData(encrypted, None, None, None, 0)[1].decode('utf-16-le')
 
 def main():
     import psutil
     from wechatauto import WeChat, WeChatDB
+    from memory_store import MemoryStore
     config = json.loads((ROOT / 'config.json').read_text(encoding='utf-8'))
     group, name = config['group_name'].strip(), config['bot_name'].strip()
     if not group or (config['trigger'] == 'mention' and not name):
@@ -116,6 +139,7 @@ def main():
     account = accounts.pop()
     db = WeChatDB(db_dir=str(account.parent), account=account.name,
                   workdir=str(ROOT / 'cache'))
+    memory = MemoryStore(ROOT / 'cache' / 'memory.sqlite3')
     resolved = db.username_by_nickname(group)
     if not resolved or not resolved.endswith('@chatroom'):
         raise RuntimeError('没有找到指定群聊，请检查群名或先在微信中打开该群。')
@@ -144,15 +168,64 @@ def main():
             content = content[len(prefix):].strip()
         elif trigger != 'all':
             return
+        # Long-term memory is explicit and scoped to this sender within this group.
+        # Do not send memory-management commands to the model or include them in chat history.
+        command = re.match(r'^(?:记住[:：]|/记住\s+)(.*)$', content, flags=re.S)
+        forget = re.match(r'^(?:忘记[:：]\s*(.*)|/忘记(?:\s+(.*))?)$', content, flags=re.S)
+        if command:
+            ok, reply = memory.add(resolved, sender, command.group(1))
+            if ok and reply == '记住啦。':
+                reply = '记住啦，会按你在本群的微信账号单独记录。'
+            send_background(db, resolved, group, reply)
+            return
+        if forget:
+            target = (forget.group(1) or forget.group(2) or '').strip()
+            if target in ('全部', '所有', 'all'):
+                count = memory.forget(resolved, sender)
+                reply = f'已经忘掉你的 {count} 条记忆。'
+            elif target:
+                count = memory.forget(resolved, sender, target)
+                reply = '这条记忆已经删掉啦。' if count else '没有找到完全相同的记忆。'
+            else:
+                reply = '告诉我具体要忘记哪条；要清空请发“忘记：全部”。'
+            send_background(db, resolved, group, reply)
+            return
+        if content in ('记忆', '/记忆', '我记得什么'):
+            facts = memory.list(resolved, sender)
+            reply = ('我目前记着这些：\n' + '\n'.join(f'• {item}' for item in facts)
+                     if facts else '我还没有记住你的个人信息。可以发“记住：内容”，让我记住某件事。')
+            if facts:
+                reply += '\n提醒：群聊回复对群成员可见，请别保存不适合公开的内容。'
+            send_background(db, resolved, group, reply[:1800])
+            return
         if not content:
             content = '你好'
         try:
             persona = (ROOT / 'persona.txt').read_text(encoding='utf-8')
+            facts = memory.list(resolved, sender)
+            if facts:
+                persona += '\n\n【本群当前发言者的明确记忆】\n' + '\n'.join(f'- {item}' for item in facts)
+                persona += '\n这些内容仅属于当前发言者。不要推断或泄露给其他群成员；仅在相关时自然使用。'
             messages = [{'role': 'system', 'content': persona}, *history,
                         {'role': 'user', 'content': content}]
+            headers = {}
+            if key:
+                headers['Authorization'] = 'Bearer ' + key
+            access_id = os.environ.get('OLLAMA_CF_ACCESS_CLIENT_ID', '').strip()
+            access_secret = os.environ.get('OLLAMA_CF_ACCESS_CLIENT_SECRET', '').strip()
+            if bool(access_id) != bool(access_secret):
+                raise RuntimeError('Cloudflare Access 配置不完整。')
+            if access_id:
+                headers['CF-Access-Client-Id'] = access_id
+                headers['CF-Access-Client-Secret'] = access_secret
+            if not headers:
+                raise RuntimeError('未配置模型 API 凭据。')
+            payload = {'model': config['model'], 'messages': messages}
+            if config.get('max_tokens'):
+                payload['max_tokens'] = int(config['max_tokens'])
             resp = requests.post(config['base_url'].rstrip('/') + '/chat/completions',
-                                 headers={'Authorization': 'Bearer ' + key},
-                                 json={'model': config['model'], 'messages': messages}, timeout=90)
+                                 headers=headers, json=payload,
+                                 timeout=int(config.get('request_timeout', 45)))
             resp.raise_for_status()
             answer = resp.json()['choices'][0]['message']['content'].strip()
             if not answer:

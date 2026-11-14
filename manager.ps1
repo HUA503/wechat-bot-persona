@@ -19,5 +19,8 @@ if (Test-Path -LiteralPath $pidPath) {
 $python = Join-Path $root '.venv\Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $python)) { throw '请先运行 install_env.bat' }
 $env:PYTHONUTF8 = '1'
+$env:OLLAMA_CF_ACCESS_CLIENT_ID = [Environment]::GetEnvironmentVariable('OLLAMA_CF_ACCESS_CLIENT_ID', 'User')
+$env:OLLAMA_CF_ACCESS_CLIENT_SECRET = [Environment]::GetEnvironmentVariable('OLLAMA_CF_ACCESS_CLIENT_SECRET', 'User')
+if (-not $env:OLLAMA_CF_ACCESS_CLIENT_ID -or -not $env:OLLAMA_CF_ACCESS_CLIENT_SECRET) { throw 'Cloudflare Access user variables are missing.' }
 $p = Start-Process -FilePath $python -ArgumentList '-u','bot.py' -WorkingDirectory $root -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $root 'bot.log') -RedirectStandardError (Join-Path $root 'error.log')
 Set-Content -LiteralPath $pidPath -Value $p.Id -Encoding ascii
